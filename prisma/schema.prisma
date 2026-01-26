@@ -1,0 +1,171 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String  @id @default(cuid())
+  name     String?
+  email    String  @unique
+  password String?
+
+  //profile
+  gender        String?
+  date_of_birth String?
+  avatar_url    String?
+  catagoary     catagoary?
+
+  type userStatus @default(user)
+
+  isSubscriber Boolean @default(true)
+  realSubscriber Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction Transaction[]
+  account     account?
+
+  @@index([name])
+  @@index([email])
+  @@map("users")
+}
+
+enum catagoary {
+  Casino
+  Sports
+  Stocks
+  Crypto
+}
+
+model account {
+  id                   String  @id @default(cuid())
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  stripePriceId        String?
+  stripeProductId      String?
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@index([stripePriceId])
+  @@index([stripeProductId])
+  @@map("account")
+}
+
+enum userStatus {
+  user
+  admin
+}
+
+model predictions {
+  id String @id @default(cuid())
+
+  category    catagoary
+  status      predictionsStatus @default(pending)
+  description String?
+  image   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum predictionsStatus {
+  pending
+  cansel
+  win
+  lose
+}
+
+model Setting {
+  id String @id @default(cuid())
+
+  privacyPolicy  String?
+  termsCondition String?
+  aboutUs        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("setting")
+}
+
+model SubscriptionPackage {
+  id              String   @id @default(cuid())
+  name            String
+  description     String[]
+  amount          Float
+  currency        String   @default("usd")
+  duration        String? // Subscription duration in days
+  stripeProductId String?
+  stripePriceId   String?
+  isActive        Boolean  @default(true)
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  transaction Transaction[]
+
+  @@map("subscriptionPackage")
+}
+
+model PromoCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  discount    Float    // Discount percentage (0-100)
+  maxUses     Int?     // Maximum number of uses (null = unlimited)
+  usedCount   Int      @default(0)
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  transaction Transaction[]
+
+  @@map("promoCode")
+}
+
+model Transaction {
+  id String @id @default(cuid())
+
+  // Stripe session and payment details
+  stripeSessionId       String? @unique
+  stripePaymentIntentId String?
+
+  amount        Float
+  originalAmount Float // Amount before discount
+  discountAmount Float @default(0) // Discount applied
+  currency      String  @default("usd")
+  paymentMethod String?
+
+  status        String  @default("pending")
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subscriptionPackageId String
+  subscriptionPackage   SubscriptionPackage @relation(fields: [subscriptionPackageId], references: [id])
+
+  promoCodeId String?
+  promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("transaction")
+}
