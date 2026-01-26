@@ -69,7 +69,7 @@ export const registerSendOtp = async (request, reply) => {
       });
     }
 
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString()
 
     const otpExpiry = Date.now() + 5 * 60 * 1000;
 
@@ -213,7 +213,7 @@ export const getRecentOtp = async (request, reply) => {
       });
     }
 
-    const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString()
     const newExpiry = Date.now() + 5 * 60 * 1000;
 
     await redis
@@ -494,7 +494,7 @@ export const forgotPasswordSendOtp = async (request, reply) => {
       });
     }
 
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString()
     const otpExpiry = Date.now() + 5 * 60 * 1000;
 
     forgotPasswordEmail(email, otp);
@@ -700,7 +700,7 @@ export const forgotPasswordRecentOtp = async (request, reply) => {
       });
     }
 
-    const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString()
     const newExpiry = Date.now() + 5 * 60 * 1000;
 
     await redis
