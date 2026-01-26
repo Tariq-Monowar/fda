@@ -19,7 +19,7 @@ export const checkout = async (
   reply: FastifyReply
 ) => {
   try {
-    const { promoCode } = request.body;
+    const promoCode = request.body?.promoCode;
     const userId = request.user?.id;
     const prisma = request.server.prisma;
 
