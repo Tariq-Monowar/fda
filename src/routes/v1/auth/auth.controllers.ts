@@ -168,7 +168,7 @@ export const registerVerifyOtp = async (request, reply) => {
     const token = generateJwtToken({
       id: newUser.id,
       email: newUser.email,
-      type: newUser.status,
+      type: newUser.type,
     });
 
     const { password, ...userdata } = newUser;
