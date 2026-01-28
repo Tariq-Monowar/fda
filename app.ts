@@ -6,7 +6,10 @@ import routesV1 from "./src/routes/v1";
 import fastifyStatic from "@fastify/static";
 import { registerMultipart } from "./src/config/storage.config";
 
-const app = Fastify({ logger: true });
+const app = Fastify({ 
+  logger: true,
+  bodyLimit: 10485760, // 10MB limit for JSON body
+});
 
 app.register(cors, {
   origin: ["*", "http://103.161.8.25:3000"],

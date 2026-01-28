@@ -5,7 +5,8 @@ import {
   getAllPredictions,
   updatePrediction,
   deletePredictions,
-  getAllPredictionsForUser
+  getAllPredictionsForUser,
+  getWinRate
 } from "./predictions.controllers";
 import { upload } from "../../../config/storage.config";
 
@@ -48,6 +49,14 @@ const predictionsRoutes = (fastify: FastifyInstance) => {
       preHandler: [verifyUser("user", "admin")],
     },
     getAllPredictionsForUser
+  );
+
+    fastify.get(
+    "/win-reate-and-active-packages",
+    {
+      preHandler: [verifyUser("user", "admin")],
+    },
+    getWinRate
   );
 };
 

@@ -26,7 +26,7 @@ const authRoutes = (fastify: FastifyInstance) => {
 
 
   //google auth
-  fastify.post("/register/google", googleAuth);
+  fastify.post("/register/social-auth", googleAuth);
 
   //manual log
   fastify.post("/login", usersLogin);

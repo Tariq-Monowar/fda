@@ -319,24 +319,31 @@ export const getAllPredictionsForUser = async (request, reply) => {
     const userId = request.user?.id;
     const limit = parseInt(request.query.limit) || 10;
     const cursor = request.query.cursor;
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { catagoary: true },
-    });
-
+    const category = request.query.category;
 
     const whereCondition: any = {
       status: "pending",
     };
 
-    if (user?.catagoary) {
-      whereCondition.category = user.catagoary;
+    // Get category from query parameter
+    if (category) {
+      const validCategories = ["Casino", "Sports", "Stocks", "Crypto"];
+      if (validCategories.includes(category)) {
+        whereCondition.category = category;
+      }
+      // if category not match i need to show an error message
+      else {
+        return reply.status(400).send({
+          success: false,
+          message: "Invalid category",
+          validCategories: validCategories,
+        });
+      }
     }
 
     if (cursor) {
       const cursorPrediction = await prisma.predictions.findUnique({
-        where: { id: cursor },
+        where: { id: cursor }, // Ensure cursor is a single string
         select: { createdAt: true },
       });
 
@@ -375,6 +382,69 @@ export const getAllPredictionsForUser = async (request, reply) => {
       message: "Predictions retrieved successfully",
       data,
       hasMore,
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({
+      success: false,
+      message: "Internal Server Error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+
+
+
+export const getWinRate = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const prisma = request.server.prisma;
+    const validCategories = ["Casino", "Sports", "Stocks", "Crypto"];
+
+    // Fetch data for all categories in parallel
+    const categoryData = await Promise.all(
+      validCategories.map(async (category) => {
+        // Count wins and losses only (exclude pending and cancelled)
+        const [winCount, loseCount, activeCount] = await Promise.all([
+          prisma.predictions.count({
+            where: {
+              category: category as any,
+              status: "win",
+            },
+          }),
+          prisma.predictions.count({
+            where: {
+              category: category as any,
+              status: "lose",
+            },
+          }),
+          prisma.predictions.count({
+            where: {
+              category: category as any,
+              status: "pending",
+            },
+          }),
+        ]);
+
+        // Total is only win + lose, not including pending or cancelled
+        const total = winCount + loseCount;
+
+        // Calculate win rate as (wins / (wins + losses)) * 100
+        // If no completed predictions, winRate is 0
+        const winRate = total === 0 ? 0 : Math.round((winCount / total) * 100);
+
+        return {
+          category,
+          winRate,
+          active: activeCount,
+        };
+      })
+    );
+
+    return reply.status(200).send({
+      success: true,
+      message: "Win rate and active predictions retrieved successfully",
+      data: categoryData,
     });
   } catch (error) {
     request.log.error(error);

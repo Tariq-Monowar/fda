@@ -50,8 +50,8 @@ export const registerSendOtp = async (request, reply) => {
     if (missingField) {
       return reply.status(400).send({
         success: false,
-        // message: `${missingField} is required!`,
-        message: `murubbi! ${missingField} koi?`,
+        message: `${missingField} is required!`,
+        // message: `murubbi! ${missingField} koi?`,
       });
     }
 
@@ -254,8 +254,8 @@ export const googleAuth = async (request, reply) => {
     if (missingField) {
       return reply.status(400).send({
         success: false,
-        // message: `${missingField} is required!`,
-        message: `murubbi! ${missingField} koi?`,
+        message: `${missingField} is required!`,
+        // message: `murubbi! ${missingField} koi?`,
       });
     }
 
@@ -329,8 +329,8 @@ export const googleAuth = async (request, reply) => {
     request.log.error(error);
     return reply.status(500).send({
       success: false,
-      // message: "Internal Server Error",
-      message: "Flutter Developer durbol!",
+      message: "Internal Server Error",
+      // message: "Flutter Developer durbol!",
       error: error instanceof Error ? error.message : "Unknown error",
     });
   }
