@@ -4,16 +4,9 @@ import { FastifyRequest, FastifyReply } from "fastify";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 // Create or update the single subscription package
-export const createOrUpdatePackage = async (request: FastifyRequest, reply: FastifyReply) => {
+export const createOrUpdatePackage = async (request, reply) => {
   try {
-    const { name, description, amount, currency = "usd", duration, isActive } = request.body as {
-      name?: string;
-      description?: string | string[];
-      amount?: number;
-      currency?: string;
-      duration?: string | number;
-      isActive?: boolean;
-    };
+    const { name, description, amount, currency = "usd", duration, isActive } = request.body
     const prisma = request.server.prisma;
 
     // Check if package already exists
@@ -194,7 +187,7 @@ export const getPackage = async (request: FastifyRequest, reply: FastifyReply) =
 };
 
 
-// Create promo code
+// Create promo code (also creates in Stripe so it can be deleted from Stripe later)
 export const createPromoCode = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { code, discount, maxUses } = request.body as {
@@ -218,13 +211,41 @@ export const createPromoCode = async (request: FastifyRequest, reply: FastifyRep
       });
     }
 
+    const codeUpper = code.toUpperCase();
+    let stripeCouponId: string | null = null;
+    let stripePromotionCodeId: string | null = null;
+
+    try {
+      const coupon = await stripe.coupons.create({
+        percent_off: Math.round(Number(discount)),
+        duration: "forever",
+        name: codeUpper,
+      });
+      stripeCouponId = coupon.id;
+
+      const promotionCode = await stripe.promotionCodes.create({
+        promotion: { type: "coupon", coupon: coupon.id },
+        code: codeUpper,
+      });
+      stripePromotionCodeId = promotionCode.id;
+    } catch (stripeError: any) {
+      request.log.error(stripeError);
+      return reply.status(502).send({
+        success: false,
+        message: "Failed to create promo code in Stripe",
+        error: stripeError?.message || "Stripe error",
+      });
+    }
+
     const promoCode = await prisma.promoCode.create({
       data: {
-        code: code.toUpperCase(),
+        code: codeUpper,
         discount: Number(discount),
         maxUses: maxUses ? Number(maxUses) : null,
-        expiresAt: null, // Lifetime promo codes never expire
-      },
+        expiresAt: null,
+        ...(stripeCouponId && { stripeCouponId }),
+        ...(stripePromotionCodeId && { stripePromotionCodeId }),
+      } as any,
     });
 
     return reply.status(201).send({
@@ -273,6 +294,69 @@ export const getPromoCodes = async (request: FastifyRequest, reply: FastifyReply
     return reply.status(500).send({
       success: false,
       message: "Failed to fetch promo codes",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+// Delete promo code (from DB and from Stripe if linked)
+export const deletePromoCode = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+    const prisma = request.server.prisma;
+
+    if (!id) {
+      return reply.status(400).send({
+        success: false,
+        message: "Promo code ID is required",
+      });
+    }
+
+    const promoCode = await prisma.promoCode.findUnique({
+      where: { id },
+    });
+
+    if (!promoCode) {
+      return reply.status(404).send({
+        success: false,
+        message: "Promo code not found",
+      });
+    }
+
+    const stripePromoId = (promoCode as { stripePromotionCodeId?: string }).stripePromotionCodeId;
+    const stripeCouponId = (promoCode as { stripeCouponId?: string }).stripeCouponId;
+
+    // Deactivate/delete from Stripe if we have stored IDs
+    // Stripe does not support deleting promotion codes; we deactivate them and delete the coupon
+    if (stripePromoId) {
+      try {
+        await stripe.promotionCodes.update(stripePromoId, { active: false });
+      } catch (stripeError: any) {
+        request.log.warn({ stripeError, id: stripePromoId }, "Stripe promotion code deactivate failed (may already be inactive)");
+      }
+    }
+    if (stripeCouponId) {
+      try {
+        await stripe.coupons.del(stripeCouponId);
+      } catch (stripeError: any) {
+        request.log.warn({ stripeError, id: stripeCouponId }, "Stripe coupon delete failed (may be in use or already deleted)");
+      }
+    }
+
+    await prisma.promoCode.delete({
+      where: { id },
+    });
+
+    return reply.status(200).send({
+      success: true,
+      message: "Promo code deleted successfully",
+      data: { id },
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({
+      success: false,
+      message: "Failed to delete promo code",
       error: error instanceof Error ? error.message : "Unknown error",
     });
   }

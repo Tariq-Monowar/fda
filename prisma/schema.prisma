@@ -124,14 +124,16 @@ model SubscriptionPackage {
 }
 
 model PromoCode {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  discount    Float    // Discount percentage (0-100)
-  maxUses     Int?     // Maximum number of uses (null = unlimited)
-  usedCount   Int      @default(0)
-  isActive    Boolean  @default(true)
-  expiresAt   DateTime?
-  
+  id                     String   @id @default(cuid())
+  code                   String   @unique
+  discount               Float    // Discount percentage (0-100)
+  maxUses                Int?     // Maximum number of uses (null = unlimited)
+  usedCount              Int      @default(0)
+  isActive               Boolean  @default(true)
+  expiresAt              DateTime?
+  stripeCouponId         String?  // Stripe coupon ID for sync delete
+  stripePromotionCodeId  String?  // Stripe promotion code ID for sync delete
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   transaction Transaction[]
@@ -162,7 +164,7 @@ model Transaction {
   subscriptionPackage   SubscriptionPackage @relation(fields: [subscriptionPackageId], references: [id])
 
   promoCodeId String?
-  promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id])
+  promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

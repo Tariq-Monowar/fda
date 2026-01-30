@@ -328,7 +328,7 @@ export const getAllPredictionsForUser = async (request, reply) => {
     // Get category from query parameter
     if (category) {
       const validCategories = ["Casino", "Sports", "Stocks", "Crypto"];
-      if (validCategories.includes(category)) {
+      if (validCategories.includes(category)) {    
         whereCondition.category = category;
       }
       // if category not match i need to show an error message
