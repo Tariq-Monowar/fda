@@ -3,7 +3,7 @@ import { FileService } from "../../../utils/fileService";
 import { getImageUrl } from "../../../utils/baseurl";
 
 
-// Create a new prediction
+
 export const createPrediction = async (request, reply) => {
   let image: any;
 
@@ -67,43 +67,86 @@ export const createPrediction = async (request, reply) => {
   }
 };
 
-// Get all predictions with pagination
+const VALID_CATEGORIES = ["Casino", "Sports", "Stocks", "Crypto"];
+const VALID_STATUSES = ["pending", "cansel", "win", "lose"];
+
+function getNormalizedQuery(request: { url?: string }): Record<string, string> {
+  const url = request.url || "";
+  const queryPart = url.indexOf("?") === -1 ? "" : url.slice(url.indexOf("?") + 1);
+  const normalized = queryPart.replace(/\?/g, "&");
+  const params = new URLSearchParams(normalized);
+  const out: Record<string, string> = {};
+  params.forEach((value, key) => {
+    out[key] = value;
+  });
+  return out;
+}
+
+
+
+async function getCategoryWinRates(prisma: any): Promise<Record<string, number>> {
+  const [winCounts, loseCounts] = await Promise.all([
+    prisma.predictions.groupBy({
+      by: ["category"],
+      where: { status: "win" },
+      _count: { id: true },
+    }),
+    prisma.predictions.groupBy({
+      by: ["category"],
+      where: { status: "lose" },
+      _count: { id: true },
+    }),
+  ]);
+  const winByCat: Record<string, number> = {};
+  const loseByCat: Record<string, number> = {};
+  winCounts.forEach((r: { category: string; _count: { id: number } }) => {
+    winByCat[r.category] = r._count.id;
+  });
+  loseCounts.forEach((r: { category: string; _count: { id: number } }) => {
+    loseByCat[r.category] = r._count.id;
+  });
+  const rates: Record<string, number> = {};
+  VALID_CATEGORIES.forEach((cat) => {
+    const w = winByCat[cat] ?? 0;
+    const l = loseByCat[cat] ?? 0;
+    rates[cat] = w + l === 0 ? 0 : Math.round((w / (w + l)) * 100);
+  });
+  return rates;
+}
+
 export const getAllPredictions = async (request, reply) => {
   try {
     const prisma = request.server.prisma;
+    const q = getNormalizedQuery(request);
 
-    const page = parseInt(request.query.page) || 1;
-    const limit = parseInt(request.query.limit) || 10;
+    const page = parseInt(q.page || "", 10) || 1;
+    const limit = parseInt(q.limit || "", 10) || 10;
     const skip = (page - 1) * limit;
-    const category = request.query.category;
-    const status = request.query.status;
+    const category = q.category?.trim();
+    const status = q.status?.trim();
 
-    // Build where condition
     const whereCondition: any = {};
     if (category) {
-      const validCategories = ["Casino", "Sports", "Stocks", "Crypto"];
-      if (validCategories.includes(category)) {
-        whereCondition.category = category;
+      if (!VALID_CATEGORIES.includes(category)) {
+        return reply.status(400).send({
+          success: false,
+          message: "Invalid category",
+          validCategories: VALID_CATEGORIES,
+        });
       }
+      whereCondition.category = category;
     }
-    if (status) {
-      const validStatuses = ["pending", "cansel", "win", "lose"];
-      if (validStatuses.includes(status)) {
-        whereCondition.status = status;
-      }
+    if (status && VALID_STATUSES.includes(status)) {
+      whereCondition.status = status;
     }
 
     const [totalItems, predictions] = await Promise.all([
-      prisma.predictions.count({
-        where: whereCondition,
-      }),
+      prisma.predictions.count({ where: whereCondition }),
       prisma.predictions.findMany({
         where: whereCondition,
         skip,
         take: limit,
-        orderBy: {
-          createdAt: "desc",
-        },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
 
@@ -137,7 +180,6 @@ export const getAllPredictions = async (request, reply) => {
   }
 };
 
-// Update a prediction
 export const updatePrediction = async (request, reply) => {
   let newImage: any;
   let oldImage: string | null = null;
@@ -244,7 +286,6 @@ export const updatePrediction = async (request, reply) => {
   }
 };
 
-// Delete predictions by array of IDs
 export const deletePredictions = async (request, reply) => {
   try {
     const { ids } = request.body;
@@ -316,66 +357,57 @@ export const deletePredictions = async (request, reply) => {
 export const getAllPredictionsForUser = async (request, reply) => {
   try {
     const prisma = request.server.prisma;
-    const userId = request.user?.id;
-    const limit = parseInt(request.query.limit) || 10;
-    const cursor = request.query.cursor;
-    const category = request.query.category;
+    const q = getNormalizedQuery(request);
+    const limit = parseInt(q.limit || "", 10) || 10;
+    const cursor = q.cursor?.trim();
+    const category = q.category?.trim();
 
-    const whereCondition: any = {
-      status: "pending",
-    };
+    const whereCondition: any = { status: "pending" };
 
-    // Get category from query parameter
     if (category) {
-      const validCategories = ["Casino", "Sports", "Stocks", "Crypto"];
-      if (validCategories.includes(category)) {    
-        whereCondition.category = category;
-      }
-      // if category not match i need to show an error message
-      else {
+      if (!VALID_CATEGORIES.includes(category)) {
         return reply.status(400).send({
           success: false,
           message: "Invalid category",
-          validCategories: validCategories,
+          validCategories: VALID_CATEGORIES,
         });
       }
+      whereCondition.category = category;
     }
 
-    if (cursor) {
-      const cursorPrediction = await prisma.predictions.findUnique({
-        where: { id: cursor }, // Ensure cursor is a single string
-        select: { createdAt: true },
+    const fetchPredictions = async () => {
+      if (cursor) {
+        const cursorPrediction = await prisma.predictions.findUnique({
+          where: { id: String(cursor) },
+          select: { createdAt: true },
+        });
+        if (!cursorPrediction) return { predictions: [], hasMore: false };
+        whereCondition.createdAt = { lt: cursorPrediction.createdAt };
+      }
+      const predictions = await prisma.predictions.findMany({
+        where: whereCondition,
+        take: limit + 1,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          category: true,
+          description: true,
+          createdAt: true,
+        },
       });
+      const hasMore = predictions.length > limit;
+      return { predictions: hasMore ? predictions.slice(0, limit) : predictions, hasMore };
+    };
 
-      if (!cursorPrediction) {
-        return reply.status(200).send({
-          success: true,
-          message: "Predictions retrieved successfully",
-          data: [],
-          hasMore: false,
-        });
-      }
+    const [{ predictions, hasMore }, winRatesByCategory] = await Promise.all([
+      fetchPredictions(),
+      getCategoryWinRates(prisma),
+    ]);
 
-      whereCondition.createdAt = {
-        lt: cursorPrediction.createdAt,
-      };
-    }
-
-    const predictions = await prisma.predictions.findMany({
-      where: whereCondition,
-      take: limit + 1,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        category: true,
-        description: true,
-        createdAt: true,
-      },
-    });
-
-    // Determine pagination info
-    const hasMore = predictions.length > limit;
-    const data = hasMore ? predictions.slice(0, limit) : predictions;
+    const data = predictions.map((p) => ({
+      ...p,
+      winRate: winRatesByCategory[p.category] ?? 0,
+    }));
 
     return reply.status(200).send({
       success: true,
@@ -394,17 +426,13 @@ export const getAllPredictionsForUser = async (request, reply) => {
 };
 
 
-
-
 export const getWinRate = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const prisma = request.server.prisma;
     const validCategories = ["Casino", "Sports", "Stocks", "Crypto"];
 
-    // Fetch data for all categories in parallel
     const categoryData = await Promise.all(
       validCategories.map(async (category) => {
-        // Count wins and losses only (exclude pending and cancelled)
         const [winCount, loseCount, activeCount] = await Promise.all([
           prisma.predictions.count({
             where: {

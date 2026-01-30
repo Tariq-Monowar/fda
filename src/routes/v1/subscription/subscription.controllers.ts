@@ -6,7 +6,15 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 // Create or update the single subscription package
 export const createOrUpdatePackage = async (request, reply) => {
   try {
-    const { name, description, amount, currency = "usd", duration, isActive } = request.body
+    const {
+      name,
+      title,
+      description,
+      amount,
+      currency = "usd",
+      duration,
+      isActive,
+    } = request.body;
     const prisma = request.server.prisma;
 
     // Check if package already exists
@@ -14,12 +22,14 @@ export const createOrUpdatePackage = async (request, reply) => {
       orderBy: { createdAt: "desc" },
     });
 
-    // If package doesn't exist, create it (requires name, description, amount)
     if (!existing) {
-      if (!name || !description || !amount) {
+      // Create: require name, title, description, amount, duration
+      const requiredFields = ["name", "title", "description", "amount", "duration"];
+      const missingField = requiredFields.find((key) => !request.body[key]);
+      if (missingField) {
         return reply.status(400).send({
           success: false,
-          message: "Name, description, and amount are required to create a package",
+          message: `${missingField} is required`,
         });
       }
 
@@ -32,7 +42,9 @@ export const createOrUpdatePackage = async (request, reply) => {
 
       const product = await stripe.products.create({
         name,
-        description: Array.isArray(description) ? description.join(", ") : description,
+        description: Array.isArray(description)
+          ? description.join(", ")
+          : description,
       });
 
       const price = await stripe.prices.create({
@@ -44,6 +56,7 @@ export const createOrUpdatePackage = async (request, reply) => {
       const packageData = await prisma.subscriptionPackage.create({
         data: {
           name,
+          title,
           description: Array.isArray(description) ? description : [description],
           amount: Number(amount),
           currency,
@@ -60,11 +73,14 @@ export const createOrUpdatePackage = async (request, reply) => {
       });
     }
 
-    // If package exists, update it
+    // Update existing package
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
+    if (title !== undefined) updateData.title = title;
     if (description !== undefined) {
-      updateData.description = Array.isArray(description) ? description : [description];
+      updateData.description = Array.isArray(description)
+        ? description
+        : [description];
     }
     if (amount !== undefined) {
       if (amount <= 0) {
@@ -76,7 +92,8 @@ export const createOrUpdatePackage = async (request, reply) => {
       updateData.amount = amount;
     }
     if (currency !== undefined) updateData.currency = currency;
-    if (duration !== undefined) updateData.duration = duration ? String(duration) : null;
+    if (duration !== undefined)
+      updateData.duration = duration ? String(duration) : null;
     if (isActive !== undefined) updateData.isActive = isActive;
 
     // Check if Stripe product exists, create new one if it doesn't
@@ -113,7 +130,7 @@ export const createOrUpdatePackage = async (request, reply) => {
       stripeProductId = newProduct.id;
       updateData.stripeProductId = stripeProductId;
     } else if (stripeProductId && (name || description)) {
-      // Update existing Stripe product if name or description changed
+
       await stripe.products.update(stripeProductId, {
         name: name || existing.name,
         description: Array.isArray(description)
@@ -123,7 +140,10 @@ export const createOrUpdatePackage = async (request, reply) => {
     }
 
     // Create new price if amount changed or product was recreated
-    if ((amount !== undefined && amount !== existing.amount) || needsNewProduct) {
+    if (
+      (amount !== undefined && amount !== existing.amount) ||
+      needsNewProduct
+    ) {
       const finalAmount = amount !== undefined ? amount : existing.amount;
       const finalCurrency = currency || existing.currency;
 
@@ -155,8 +175,11 @@ export const createOrUpdatePackage = async (request, reply) => {
   }
 };
 
-// Get the single subscription package
-export const getPackage = async (request: FastifyRequest, reply: FastifyReply) => {
+
+export const getPackage = async (
+  request,
+  reply,
+) => {
   try {
     const prisma = request.server.prisma;
 
@@ -187,8 +210,10 @@ export const getPackage = async (request: FastifyRequest, reply: FastifyReply) =
 };
 
 
-// Create promo code (also creates in Stripe so it can be deleted from Stripe later)
-export const createPromoCode = async (request: FastifyRequest, reply: FastifyReply) => {
+export const createPromoCode = async (
+  request,
+  reply,
+) => {
   try {
     const { code, discount, maxUses } = request.body as {
       code: string;
@@ -270,7 +295,10 @@ export const createPromoCode = async (request: FastifyRequest, reply: FastifyRep
 };
 
 // Get all promo codes
-export const getPromoCodes = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getPromoCodes = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
   try {
     const prisma = request.server.prisma;
     //pagination
@@ -299,8 +327,10 @@ export const getPromoCodes = async (request: FastifyRequest, reply: FastifyReply
   }
 };
 
-// Delete promo code (from DB and from Stripe if linked)
-export const deletePromoCode = async (request: FastifyRequest, reply: FastifyReply) => {
+export const deletePromoCode = async (
+  request,
+  reply,
+) => {
   try {
     const { id } = request.params as { id: string };
     const prisma = request.server.prisma;
@@ -323,23 +353,30 @@ export const deletePromoCode = async (request: FastifyRequest, reply: FastifyRep
       });
     }
 
-    const stripePromoId = (promoCode as { stripePromotionCodeId?: string }).stripePromotionCodeId;
-    const stripeCouponId = (promoCode as { stripeCouponId?: string }).stripeCouponId;
+    const stripePromoId = (promoCode as { stripePromotionCodeId?: string })
+      .stripePromotionCodeId;
+    const stripeCouponId = (promoCode as { stripeCouponId?: string })
+      .stripeCouponId;
 
-    // Deactivate/delete from Stripe if we have stored IDs
-    // Stripe does not support deleting promotion codes; we deactivate them and delete the coupon
+ 
     if (stripePromoId) {
       try {
         await stripe.promotionCodes.update(stripePromoId, { active: false });
       } catch (stripeError: any) {
-        request.log.warn({ stripeError, id: stripePromoId }, "Stripe promotion code deactivate failed (may already be inactive)");
+        request.log.warn(
+          { stripeError, id: stripePromoId },
+          "Stripe promotion code deactivate failed (may already be inactive)",
+        );
       }
     }
     if (stripeCouponId) {
       try {
         await stripe.coupons.del(stripeCouponId);
       } catch (stripeError: any) {
-        request.log.warn({ stripeError, id: stripeCouponId }, "Stripe coupon delete failed (may be in use or already deleted)");
+        request.log.warn(
+          { stripeError, id: stripeCouponId },
+          "Stripe coupon delete failed (may be in use or already deleted)",
+        );
       }
     }
 
@@ -362,74 +399,3 @@ export const deletePromoCode = async (request: FastifyRequest, reply: FastifyRep
   }
 };
 
-// Validate promo code
-export const validatePromoCode = async (request: FastifyRequest, reply: FastifyReply) => {
-  try {
-    const { code, amount } = request.body as {
-      code: string;
-      amount: number;
-    };
-    const prisma = request.server.prisma;
-
-    if (!code || !amount) {
-      return reply.status(400).send({
-        success: false,
-        message: "Code and amount are required",
-      });
-    }
-
-    const promoCode = await prisma.promoCode.findUnique({
-      where: { code: code.toUpperCase() },
-    });
-
-    if (!promoCode) {
-      return reply.status(404).send({
-        success: false,
-        message: "Promo code not found",
-      });
-    }
-
-    if (!promoCode.isActive) {
-      return reply.status(400).send({
-        success: false,
-        message: "Promo code is inactive",
-      });
-    }
-
-    if (promoCode.expiresAt && new Date() > promoCode.expiresAt) {
-      return reply.status(400).send({
-        success: false,
-        message: "Promo code has expired",
-      });
-    }
-
-    if (promoCode.maxUses && promoCode.usedCount >= promoCode.maxUses) {
-      return reply.status(400).send({
-        success: false,
-        message: "Promo code usage limit reached",
-      });
-    }
-
-    const discountAmount = (Number(amount) * promoCode.discount) / 100;
-    const finalAmount = Number(amount) - discountAmount;
-
-    return reply.status(200).send({
-      success: true,
-      message: "Promo code is valid",
-      data: {
-        code: promoCode.code,
-        discount: promoCode.discount,
-        originalAmount: Number(amount),
-        discountAmount,
-        finalAmount,
-      },
-    });
-  } catch (error) {
-    request.log.error(error);
-    return reply.status(500).send({
-      success: false,
-      message: "Failed to validate promo code",
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-};
