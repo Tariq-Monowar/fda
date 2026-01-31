@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { verifyUser } from "../../../middleware/auth.middleware";
-import { getDashboardStats, getDashboardPredictions } from "./dashboard.controllers";
+import { getDashboardStats, getDashboardPredictions, getAllUsers } from "./dashboard.controllers";
 
 const dashboardRoutes = (fastify: FastifyInstance) => {
   fastify.get(
@@ -13,6 +13,12 @@ const dashboardRoutes = (fastify: FastifyInstance) => {
     "/predictions",
     { preHandler: [verifyUser("admin")] },
     getDashboardPredictions
+  );
+
+  fastify.get(
+    "/get-all-users",
+    { preHandler: [verifyUser("admin")] },
+    getAllUsers
   );
 };
 

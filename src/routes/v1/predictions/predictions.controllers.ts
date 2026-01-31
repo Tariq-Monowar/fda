@@ -124,6 +124,7 @@ export const getAllPredictions = async (request, reply) => {
     const skip = (page - 1) * limit;
     const category = q.category?.trim();
     const status = q.status?.trim();
+    const search = q.search?.trim();
 
     const whereCondition: any = {};
     if (category) {
@@ -138,6 +139,9 @@ export const getAllPredictions = async (request, reply) => {
     }
     if (status && VALID_STATUSES.includes(status)) {
       whereCondition.status = status;
+    }
+    if (search) {
+      whereCondition.description = { contains: search, mode: "insensitive" };
     }
 
     const [totalItems, predictions] = await Promise.all([
@@ -424,7 +428,6 @@ export const getAllPredictionsForUser = async (request, reply) => {
     });
   }
 };
-
 
 export const getWinRate = async (request: FastifyRequest, reply: FastifyReply) => {
   try {

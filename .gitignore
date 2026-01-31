@@ -1,9 +1,13 @@
 node_modules
 
-.env
 uploads
 /generated/prisma
 prisma/migrations
 dist
 __practice__
 __test__
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
+config.bat

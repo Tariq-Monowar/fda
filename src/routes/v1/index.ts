@@ -10,6 +10,7 @@ import transactionRoutes from "./transactions/transactions.routes";
 import stripeRoutes from "./webhooks/stripe/webhooks.routes";
 import predictionsRoutes from "./predictions/predictions.routes";
 import dashboardRoutes from "./dashboard/dashboard.routes";
+import emailRoutes from "./email/email.routes";
 
 async function routesV1(fastify: FastifyInstance) {
   const moduleRoutes = [
@@ -22,6 +23,7 @@ async function routesV1(fastify: FastifyInstance) {
     { path: "/transactions", route: transactionRoutes },
     { path: "/webhooks/stripe", route: stripeRoutes },
     { path: "/dashboard", route: dashboardRoutes },
+    { path: "/email", route: emailRoutes },
   ];
 
   moduleRoutes.forEach(({ path, route }) => {

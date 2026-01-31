@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon --exec ts-node index.ts",
-    "start": "ts-node index.ts",
-    "build": "tsc",
+    "dev": "node init && nodemon --exec ts-node index.ts",
+    "start": "node init && ts-node index.ts",
+    "build": "node init && tsc",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
@@ -18,9 +18,9 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
-    "dev:clean": "npm run docker:clean && npm run db:reset",
-    "dev:setup": "npm run docker:up && powershell -command \"Start-Sleep -Seconds 10\" && npm run db:generate && npm run db:push",
-    "dev:with-db": "npm run docker:up && powershell -command \"Start-Sleep -Seconds 10\" && npm run dev"
+    "dev:clean": "node init && npm run docker:clean && npm run db:reset",
+    "dev:setup": "node init && npm run docker:up && powershell -command \"Start-Sleep -Seconds 10\" && npm run db:generate && npm run db:push",
+    "dev:with-db": "node init && npm run docker:up && powershell -command \"Start-Sleep -Seconds 10\" && npm run dev"
   },
   "keywords": [],
   "author": "",
