@@ -7,6 +7,7 @@ import {
   otpVerificationEmailTamplate,
   twoFactorOtpTemplate,
 } from "../emails/auth.email";
+import { contactFormEmailTemplate } from "../emails/contact.email";
 
 dotenv.config();
 
@@ -61,4 +62,17 @@ export const sendForgotPasswordOTP = async (email: string, otp: string) => {
 export const sendTwoFactorOtp = async (email: string, otp: string) => {
   const htmlContent = twoFactorOtpTemplate(otp);
   await sendEmail(email, "Two-Factor Authentication Code", htmlContent);
+};
+
+const ADMIN_EMAIL = "tqmhosain@gmail.com";
+
+/** Send contact form submission to admin. */
+export const sendContactEmailToAdmin = async (params: {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+}): Promise<void> => {
+  const htmlContent = contactFormEmailTemplate(params);
+  await sendEmail(ADMIN_EMAIL, `Contact: ${params.subject}`, htmlContent);
 };

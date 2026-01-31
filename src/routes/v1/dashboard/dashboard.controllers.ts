@@ -279,3 +279,79 @@ export const getDashboardPredictions = async (request: FastifyRequest, reply: Fa
     });
   }
 };
+
+export const getAllUsers = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const q = request.query as { limit?: string; page?: string; search?: string };
+    const page = parseInt(q?.page || "1", 10) || 1;
+    const limit = parseInt(q?.limit || "10", 10) || 10;
+    const search = (q?.search || "").trim();
+    const prisma = request.server.prisma;
+    const skip = (page - 1) * limit;
+
+    const whereCondition = {
+      type: "user" as const,
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: "insensitive" as const } },
+          { email: { contains: search, mode: "insensitive" as const } },
+        ],
+      }),
+    };
+
+    const [totalItems, users] = await Promise.all([
+      prisma.user.count({ where: whereCondition }),
+      prisma.user.findMany({
+        where: whereCondition,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar_url: true,
+          type: true,
+          isSubscriber: true,
+          realSubscriber: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    const data = users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      avatar_url: u.avatar_url,
+      type: u.type,
+      isSubscriber: u.isSubscriber,
+      realSubscriber: u.realSubscriber,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+    }));
+
+    return reply.status(200).send({
+      success: true,
+      message: "Users retrieved successfully",
+      data,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: page,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({
+      success: false,
+      message: "Failed to get all users",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
